@@ -93,11 +93,13 @@
       try {
         const [binanceRaw, upbitRaw] = await Promise.all([
           fetch("https://api.binance.com/api/v3/ticker/price").then(r => r.json()),
-          fetch("https://api.upbit.com/v1/market/all").then(r => r.json())
+          fetch("https://corsproxy.io/?" + encodeURIComponent("https://api.upbit.com/v1/market/all"))
+.then(r => r.json())
         ]);
 
         const upbitMarkets = upbitRaw.filter(m => m.market.startsWith("KRW-"));
-        const upbitTickers = await fetch("https://api.upbit.com/v1/ticker?markets=" + upbitMarkets.map(m => m.market).join(",")).then(r => r.json());
+        const upbitTickers = await fetch("https://corsproxy.io/?" + encodeURIComponent("https://api.upbit.com/v1/ticker?markets=" + markets))
+
 
         const positiveTable = document.getElementById("premium-positive");
         const negativeTable = document.getElementById("premium-negative");
@@ -159,7 +161,7 @@
     }
 
     fetchAll();
-    setInterval(fetchAll, 5000);
+    setInterval(fetchAll, 10000);
   </script>
 </body>
 </html>

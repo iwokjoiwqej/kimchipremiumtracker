@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>실시간 김치프리미엄 트래커</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background-color: #f4f6f9;
+      margin: 0;
+      padding: 0;
+    }
+    header {
+      background-color: #222;
+      color: white;
+      padding: 20px;
+      font-size: 1.5rem;
+      text-align: center;
+    }
+    .container {
+      display: flex;
+      justify-content: space-around;
+      flex-wrap: wrap;
+      padding: 10px;
+    }
+    table {
+      width: 100%;
+      max-width: 460px;
+      border-collapse: collapse;
+      background-color: white;
+      box-shadow: 0 0 10px rgba(0,0,0,0.05);
+      margin: 10px;
+      font-size: 0.9rem;
+    }
+    th, td {
+      padding: 10px;
+      border: 1px solid #ddd;
+      text-align: center;
+    }
+    th {
+      background-color: #f2f2f2;
+    }
+    .positive { color: green; font-weight: bold; }
+    .negative { color: red; font-weight: bold; }
+    h2 {
+      text-align: center;
+      margin: 10px;
+    }
+  </style>
+</head>
+<body>
+  <header>📊 실시간 김치프리미엄 Top 10 비교</header>
+  <div class="container">
+    <div>
+      <h2>김치프리미엄 상위</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>코인</th>
+            <th>Upbit 가격 (KRW)<br><span style="font-size:0.8em">(USD)</span></th>
+            <th>Binance 가격 (KRW)<br><span style="font-size:0.8em">(USD)</span></th>
+            <th>김치프리미엄 (%)</th>
+          </tr>
+        </thead>
+        <tbody id="premium-positive">
+          <tr><td colspan="4">불러오는 중...</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div>
+      <h2>역프리미엄 상위</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>코인</th>
+            <th>Upbit 가격 (KRW)<br><span style="font-size:0.8em">(USD)</span></th>
+            <th>Binance 가격 (KRW)<br><span style="font-size:0.8em">(USD)</span></th>
+            <th>김치프리미엄 (%)</th>
+          </tr>
+        </thead>
+        <tbody id="premium-negative">
+          <tr><td colspan="4">불러오는 중...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    const USDKRW = 1400;
+
+    async function fetchAll() {
+      try {
+        const [binanceRaw, upbitRaw] = await Promise.all([
+          fetch("https://api.binance.com/api/v3/ticker/price").then(r => r.json()),
+          fetch("https://api.upbit.com/v1/market/all").then(r => r.json())
+        ]);
+
+        const upbitMarkets = upbitRaw.filter(m => m.market.startsWith("KRW-"));
+        const upbitTickers = await fetch("https://api.upbit.com/v1/ticker?markets=" + upbitMarkets.map(m => m.market).join(",")).then(r => r.json());
+
+        const positiveTable = document.getElementById("premium-positive");
+        const negativeTable = document.getElementById("premium-negative");
+        positiveTable.innerHTML = "";
+        negativeTable.innerHTML = "";
+
+        let results = [];
+
+        upbitMarkets.forEach(market => {
+          const coin = market.market.replace("KRW-", "");
+          const upbitTicker = upbitTickers.find(t => t.market === market.market);
+          const binanceTicker = binanceRaw.find(b => b.symbol === coin + "USDT");
+
+          if (upbitTicker && binanceTicker) {
+            const upbitPrice = parseFloat(upbitTicker.trade_price);
+            const binancePrice = parseFloat(binanceTicker.price);
+            const binanceInKRW = binancePrice * USDKRW;
+            const premium = ((upbitPrice - binanceInKRW) / binanceInKRW) * 100;
+            if (!isFinite(premium)) return;
+            results.push({
+              coin,
+              upbitPrice,
+              binanceInKRW,
+              upbitUSD: upbitPrice / USDKRW,
+              binanceUSD: binancePrice,
+              premium
+            });
+          }
+        });
+
+        const positives = results.filter(r => r.premium > 0).sort((a, b) => b.premium - a.premium).slice(0, 10);
+        const negatives = results.filter(r => r.premium < 0).sort((a, b) => a.premium - b.premium).slice(0, 10);
+
+        positives.forEach(({coin, upbitPrice, binanceInKRW, upbitUSD, binanceUSD, premium}) => {
+          const row = document.createElement("tr");
+          row.innerHTML = `
+            <td>${coin}</td>
+            <td>${upbitPrice.toFixed(3)}원<br><small>(${upbitUSD.toFixed(2)} USD)</small></td>
+            <td>${binanceInKRW.toFixed(3)}원<br><small>(${binanceUSD.toFixed(2)} USD)</small></td>
+            <td class="positive">${premium.toFixed(2)}%</td>
+          `;
+          positiveTable.appendChild(row);
+        });
+
+        negatives.forEach(({coin, upbitPrice, binanceInKRW, upbitUSD, binanceUSD, premium}) => {
+          const row = document.createElement("tr");
+          row.innerHTML = `
+            <td>${coin}</td>
+            <td>${upbitPrice.toFixed(3)}원<br><small>(${upbitUSD.toFixed(2)} USD)</small></td>
+            <td>${binanceInKRW.toFixed(3)}원<br><small>(${binanceUSD.toFixed(2)} USD)</small></td>
+            <td class="negative">${premium.toFixed(2)}%</td>
+          `;
+          negativeTable.appendChild(row);
+        });
+
+      } catch (err) {
+        console.error("오류 발생:", err);
+      }
+    }
+
+    fetchAll();
+    setInterval(fetchAll, 5000);
+  </script>
+</body>
+</html>
